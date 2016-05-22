@@ -122,6 +122,15 @@ func ValidatePodSpecificAnnotations(annotations map[string]string, fldPath *fiel
 		}
 	}
 
+	// @antonmry TODO Here we have to validate at least it's a number in range . Also in the hosts section.
+	for key, value := range annotations {
+		if len(key) > len(utilpod.PortRangeEndAnnotation) {
+			if key[0:len(utilpod.PortRangeEndAnnotation)] == utilpod.PortRangeEndAnnotation {
+				glog.Infof("@antonmry Annotation found %s in validation with value %s", key, value)
+			}
+		}
+	}
+
 	return allErrs
 }
 
@@ -1914,6 +1923,7 @@ func ValidateService(service *api.Service) field.ErrorList {
 			// This is a workaround for broken cloud environments that
 			// over-open firewalls.  Hopefully it can go away when more clouds
 			// understand containers better.
+			// @antonmry TODO I've to check if the port is in the range...
 			if port.Port == 10250 {
 				portPath := specPath.Child("ports").Index(ix)
 				allErrs = append(allErrs, field.Invalid(portPath, port.Port, "may not expose port 10250 externally since it is used by kubelet"))
@@ -2047,6 +2057,8 @@ func validateServicePort(sp *api.ServicePort, requireName, isHeadlessService boo
 	if sp.TargetPort.Type == intstr.String && !validation.IsValidPortName(sp.TargetPort.StrVal) {
 		allErrs = append(allErrs, field.Invalid(fldPath.Child("targetPort"), sp.TargetPort, PortNameErrorMsg))
 	}
+
+	// @antonmry TODO Check all the ports in the range here...
 
 	// in the v1 API, targetPorts on headless services were tolerated.
 	// once we have version-specific validation, we can reject this on newer API versions, but until then, we have to tolerate it for compatibility.

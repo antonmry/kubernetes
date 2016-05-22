@@ -30,6 +30,7 @@ import (
 	"k8s.io/kubernetes/pkg/api/errors"
 	podutil "k8s.io/kubernetes/pkg/api/pod"
 	utilpod "k8s.io/kubernetes/pkg/api/pod"
+	utilservice "k8s.io/kubernetes/pkg/api/service"
 	"k8s.io/kubernetes/pkg/client/cache"
 	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/controller"
@@ -62,6 +63,7 @@ const (
 	// service just for the PetSet, and clients shouldn't be using this Service
 	// for anything so unready endpoints don't matter.
 	TolerateUnreadyEndpointsAnnotation = "service.alpha.kubernetes.io/tolerate-unready-endpoints"
+
 )
 
 var (
@@ -419,6 +421,12 @@ func (e *EndpointController) syncService(key string) {
 				podHostNames[string(pod.Status.PodIP)] = hostRecord
 				epa.Hostname = hostname
 			}
+
+			if portrange, ok := service.Annotations[utilservice.PortRangeEndAnnotation+portName]; ok {
+				glog.Infof("@antonmry Received annotation %s with value %s in endpoints_controller",
+					utilservice.PortRangeEndAnnotation+portName, portrange)
+			}
+
 
 			if tolerateUnreadyEndpoints || api.IsPodReady(pod) {
 				subsets = append(subsets, api.EndpointSubset{

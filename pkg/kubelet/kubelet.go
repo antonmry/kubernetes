@@ -29,6 +29,7 @@ import (
 	goRuntime "runtime"
 	"sort"
 	"strings"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -1276,32 +1277,52 @@ func ensureHostsFile(fileName, hostIP, hostName, hostDomainName string) error {
 	return ioutil.WriteFile(fileName, buffer.Bytes(), 0644)
 }
 
-func makePortMappings(container *api.Container) (ports []kubecontainer.PortMapping) {
+func makePortMappings(pod *api.Pod, container *api.Container) (ports []kubecontainer.PortMapping) {
+	// @antonmry: I've added pod as parameter
+	podAnnotations := pod.Annotations
+
 	names := make(map[string]struct{})
 	for _, p := range container.Ports {
-		pm := kubecontainer.PortMapping{
-			HostPort:      int(p.HostPort),
-			ContainerPort: int(p.ContainerPort),
-			Protocol:      p.Protocol,
-			HostIP:        p.HostIP,
+
+		endport := int(p.ContainerPort)
+
+		if portrange, exists := podAnnotations[utilpod.PortRangeEndAnnotation+p.Name]; exists {
+			glog.Infof("@antonmry Annotation found %s in kubelet with value %s", utilpod.PortRangeEndAnnotation+p.Name, portrange)
+			if n, err := strconv.Atoi(portrange); err != nil && n > endport {
+				endport = n
+			}
 		}
 
-		// We need to create some default port name if it's not specified, since
-		// this is necessary for rkt.
-		// http://issue.k8s.io/7710
-		if p.Name == "" {
-			pm.Name = fmt.Sprintf("%s-%s:%d", container.Name, p.Protocol, p.ContainerPort)
-		} else {
-			pm.Name = fmt.Sprintf("%s-%s", container.Name, p.Name)
-		}
+		for i := int(endport) - int(p.ContainerPort); i < int(endport) + 1; i++ {
 
-		// Protect against exposing the same protocol-port more than once in a container.
-		if _, ok := names[pm.Name]; ok {
-			glog.Warningf("Port name conflicted, %q is defined more than once", pm.Name)
-			continue
+			pm := kubecontainer.PortMapping{
+				HostPort:      int(p.HostPort) + i,
+				ContainerPort: int(p.ContainerPort) + i,
+				Protocol:      p.Protocol,
+				HostIP:        p.HostIP,
+			}
+
+			// We need to create some default port name if it's not specified, since
+			// this is necessary for rkt.
+			// http://issue.k8s.io/7710
+			if p.Name == "" {
+				pm.Name = fmt.Sprintf("%s-%s:%d", container.Name, p.Protocol, p.ContainerPort)
+			} else {
+				if int(endport) > int(p.ContainerPort) {
+					pm.Name = fmt.Sprintf("%s-%s", container.Name, p.Name)
+				} else {
+					pm.Name = fmt.Sprintf("%s-%s%d", container.Name, p.Name, int(endport) - i)
+				}
+			}
+
+			// Protect against exposing the same protocol-port more than once in a container.
+			if _, ok := names[pm.Name]; ok {
+				glog.Warningf("Port name conflicted, %q is defined more than once", pm.Name)
+				continue
+			}
+			ports = append(ports, pm)
+			names[pm.Name] = struct{}{}
 		}
-		ports = append(ports, pm)
-		names[pm.Name] = struct{}{}
 	}
 	return
 }
@@ -1363,7 +1384,7 @@ func (kl *Kubelet) GenerateRunContainerOptions(pod *api.Pod, container *api.Cont
 		return nil, fmt.Errorf("impossible: cannot find the mounted volumes for pod %q", format.Pod(pod))
 	}
 
-	opts.PortMappings = makePortMappings(container)
+	opts.PortMappings = makePortMappings(pod, container)
 	// Docker does not relabel volumes if the container is running
 	// in the host pid or ipc namespaces so the kubelet must
 	// relabel the volumes

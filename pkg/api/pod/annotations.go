@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The Kubernetes Authors All rights reserved.
+Copyright 2015 The Kubernetes Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,19 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package service
+package pod
 
 const (
-	// AnnotationLoadBalancerSourceRangesKey is the key of the annotation on a service to set allowed ingress ranges on their LoadBalancers
-	//
-	// It should be a comma-separated list of CIDRs, e.g. `0.0.0.0/0` to
-	// allow full access (the default) or `18.0.0.0/8,56.0.0.0/8` to allow
-	// access only from the CIDRs currently allocated to MIT & the USPS.
-	//
-	// Not all cloud providers support this annotation, though AWS & GCE do.
-	AnnotationLoadBalancerSourceRangesKey = "service.beta.kubernetes.io/load-balancer-source-ranges"
-
 	// The prefix of an annotation denoting the last port of the range. The annotation ends
 	// with the name of the port and the value is the last port of the range.
+	// @antonmry: move to annotations.go?
 	PortRangeEndAnnotation = "portrange.alpha.kubernetes.io/port-end-"
 )
+
